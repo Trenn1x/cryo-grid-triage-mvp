@@ -196,7 +196,8 @@ input[type="range"] {
   width: 100%;
 }
 
-input[type="number"] {
+input[type="number"],
+input[type="text"] {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -204,6 +205,21 @@ input[type="number"] {
   min-width: 0;
   padding: 9px 10px;
   width: 100%;
+}
+
+.metadata-panel {
+  margin-bottom: 12px;
+}
+
+.metadata-panel .panel-head span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.metadata-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .actions,
@@ -542,7 +558,8 @@ td.empty {
   }
 
   .workbench,
-  .pilot-grid {
+  .pilot-grid,
+  .metadata-grid {
     grid-template-columns: 1fr;
   }
 

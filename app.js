@@ -36,6 +36,12 @@ const refs = {
   strictnessValue: document.getElementById("strictnessValue"),
   simulationCount: document.getElementById("simulationCount"),
   simulationSeed: document.getElementById("simulationSeed"),
+  sessionName: document.getElementById("sessionName"),
+  facilityName: document.getElementById("facilityName"),
+  targetName: document.getElementById("targetName"),
+  gridId: document.getElementById("gridId"),
+  microscopeModel: document.getElementById("microscopeModel"),
+  operatorName: document.getElementById("operatorName"),
   microscopeRate: document.getElementById("microscopeRate"),
   minutesPerSkip: document.getElementById("minutesPerSkip"),
   minutesPerReview: document.getElementById("minutesPerReview"),
@@ -657,6 +663,17 @@ function getValidationSummary() {
   };
 }
 
+function getSessionMetadata() {
+  return {
+    session: refs.sessionName.value.trim(),
+    facility: refs.facilityName.value.trim(),
+    target: refs.targetName.value.trim(),
+    gridId: refs.gridId.value.trim(),
+    microscope: refs.microscopeModel.value.trim(),
+    operator: refs.operatorName.value.trim(),
+  };
+}
+
 function renderWeightBars() {
   refs.weightBars.innerHTML = "";
   for (const feature of FEATURE_DEFS) {
@@ -733,6 +750,10 @@ function renderReportPreview() {
       <p>${escapeHtml(model.recommendation)}</p>
     </div>
     <div class="report-section">
+      <h3>Session</h3>
+      <p>${escapeHtml(formatMetadataLine(model.metadata))}</p>
+    </div>
+    <div class="report-section">
       <h3>Validation</h3>
       <p>${escapeHtml(model.validation.statusText)}</p>
     </div>
@@ -771,6 +792,7 @@ function reportList(items) {
 function getReportModel() {
   const summary = getEconomicsSummary();
   const validation = getValidationSummary();
+  const metadata = getSessionMetadata();
   const generatedAt = new Date();
   const isSynthetic =
     state.results.length > 0 &&
@@ -800,6 +822,7 @@ function getReportModel() {
     generatedAt,
     generatedAtText: generatedAt.toLocaleString(),
     sourceType,
+    metadata,
     summary,
     validation,
     topQueue,
@@ -878,6 +901,9 @@ function exportPilotReport() {
 function buildStandaloneReport(model) {
   const topRows = model.topQueue.map(reportTableRow).join("");
   const reviewRows = model.reviewQueue.map(reportTableRow).join("");
+  const metadataRows = Object.entries(model.metadata)
+    .map(([key, value]) => `<tr><td>${escapeHtml(titleize(key))}</td><td>${escapeHtml(value || "Not provided")}</td></tr>`)
+    .join("");
   const weights = model.weights
     .map((weight) => `<tr><td>${escapeHtml(weight.label)}</td><td>${round1(weight.value * 100)}%</td></tr>`)
     .join("");
@@ -920,6 +946,11 @@ function buildStandaloneReport(model) {
       ${standaloneKpi("Time saved", `${round1(model.summary.minutesSaved)} min`)}
       ${standaloneKpi("Cost saved", formatMoney(model.summary.costSaved))}
     </div>
+
+    <section>
+      <h2>Session Metadata</h2>
+      <table><tbody>${metadataRows}</tbody></table>
+    </section>
 
     <section>
       <h2>Validation</h2>
@@ -972,6 +1003,24 @@ function standaloneKpi(label, value) {
   return `<div class="kpi"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`;
 }
 
+function formatMetadataLine(metadata) {
+  const items = [
+    metadata.session && `Session: ${metadata.session}`,
+    metadata.facility && `Facility: ${metadata.facility}`,
+    metadata.target && `Target: ${metadata.target}`,
+    metadata.gridId && `Grid: ${metadata.gridId}`,
+    metadata.microscope && `Microscope: ${metadata.microscope}`,
+    metadata.operator && `Operator: ${metadata.operator}`,
+  ].filter(Boolean);
+  return items.length > 0 ? items.join(" | ") : "No session metadata entered.";
+}
+
+function titleize(value) {
+  return value
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (char) => char.toUpperCase());
+}
+
 function reportTable(rows) {
   if (!rows) return "<p>No matching items.</p>";
   return `
@@ -1000,6 +1049,7 @@ function reportTableRow(result) {
 function exportCsv() {
   if (state.results.length === 0) return;
 
+  const metadata = getSessionMetadata();
   const assumptions = {
     microscope_rate_per_hour: safeNumber(refs.microscopeRate.value, 550),
     minutes_per_skip: safeNumber(refs.minutesPerSkip.value, 3.2),
@@ -1010,6 +1060,12 @@ function exportCsv() {
     [
       "rank",
       "filename",
+      "session",
+      "facility",
+      "target",
+      "grid_id",
+      "microscope",
+      "operator",
       "priority",
       "score",
       "label",
@@ -1033,6 +1089,12 @@ function exportCsv() {
     ...state.results.map((result) => [
       result.rank,
       result.fileName,
+      metadata.session,
+      metadata.facility,
+      metadata.target,
+      metadata.gridId,
+      metadata.microscope,
+      metadata.operator,
       result.priority,
       result.score,
       result.label ?? "",

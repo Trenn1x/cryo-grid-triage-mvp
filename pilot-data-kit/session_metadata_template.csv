@@ -1,0 +1,10 @@
+field,value
+session,pilot_session_001
+facility,Example Cryo-EM Core
+target,anonymized target
+grid_id,grid_or_cassette_id
+microscope,Krios or Glacios
+detector,optional detector model
+pixel_size,optional pixel size
+operator,optional anonymized operator
+notes,avoid sensitive unpublished details

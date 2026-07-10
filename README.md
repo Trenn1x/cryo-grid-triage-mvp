@@ -24,6 +24,8 @@ Browser-based cryo-EM grid triage prototype. It ranks uploaded atlas/hole images
 - CSV export with scores, metrics, labels, weights, and ROI assumptions
 - Label CSV export for synthetic sessions
 - Pilot report preview and downloadable standalone HTML report
+- Session metadata fields included in exports and reports
+- MRC/MRCS and TIFF conversion scripts for real facility data
 
 ## Synthetic sessions
 
@@ -61,6 +63,24 @@ Accepted label values include:
 - Collect: `collect`, `good`, `usable`, `accept`, `yes`, `1`
 - Review: `review`, `maybe`, `inspect`, `borderline`, `0.5`
 - Skip: `skip`, `bad`, `reject`, `unusable`, `empty`, `contaminated`, `no`, `0`
+
+## Real facility data
+
+Use `pilot-data-kit/` when asking a facility for a first labeled session.
+
+If microscope exports are not browser-readable, convert them to PNG before upload:
+
+```bash
+cd /Users/thomasverdier/cryo-grid-triage-mvp
+python3 scripts/convert_mrc_to_png.py /path/to/session --out converted_png
+python3 scripts/convert_tiff_to_png.py /path/to/session --out converted_png
+```
+
+`convert_mrc_to_png.py` has no third-party dependencies. `convert_tiff_to_png.py` requires Pillow:
+
+```bash
+python3 -m pip install pillow
+```
 
 ## Run locally
 
