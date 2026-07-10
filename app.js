@@ -26,6 +26,7 @@ const refs = {
   scoreButton: document.getElementById("scoreButton"),
   demoButton: document.getElementById("demoButton"),
   csvButton: document.getElementById("csvButton"),
+  reportButton: document.getElementById("reportButton"),
   clearLabelsButton: document.getElementById("clearLabelsButton"),
   labelsCsvButton: document.getElementById("labelsCsvButton"),
   resetWeightsButton: document.getElementById("resetWeightsButton"),
@@ -51,6 +52,9 @@ const refs = {
   skipCount: document.getElementById("skipCount"),
   timeSaved: document.getElementById("timeSaved"),
   costSaved: document.getElementById("costSaved"),
+  reportPanel: document.getElementById("reportPanel"),
+  reportStatus: document.getElementById("reportStatus"),
+  reportBody: document.getElementById("reportBody"),
   rowTemplate: document.getElementById("rowTemplate"),
 };
 
@@ -107,12 +111,16 @@ function bindEvents() {
   });
 
   for (const input of [refs.microscopeRate, refs.minutesPerSkip, refs.minutesPerReview]) {
-    input.addEventListener("input", () => renderSummary());
+    input.addEventListener("input", () => {
+      renderSummary();
+      renderReportPreview();
+    });
   }
 
   refs.scoreButton.addEventListener("click", runTriage);
   refs.demoButton.addEventListener("click", loadDemoSet);
   refs.csvButton.addEventListener("click", exportCsv);
+  refs.reportButton.addEventListener("click", exportPilotReport);
   refs.labelsCsvButton.addEventListener("click", exportLabelsCsv);
   refs.clearLabelsButton.addEventListener("click", clearLabels);
   refs.resetWeightsButton.addEventListener("click", resetWeights);
@@ -128,6 +136,8 @@ function setFiles(files) {
   state.analyses = [];
   state.results = [];
   refs.csvButton.disabled = true;
+  refs.reportButton.disabled = true;
+  refs.reportPanel.hidden = true;
   refs.resultsInfo.textContent =
     files.length > 0 ? `${files.length} image(s) staged.` : "No images analyzed yet.";
   refs.resultsBody.innerHTML = `
@@ -160,6 +170,7 @@ async function runTriage() {
     calibrateFromLabels();
     rerunFromAnalyses();
     refs.csvButton.disabled = false;
+    refs.reportButton.disabled = false;
   } catch (error) {
     refs.resultsInfo.textContent = `Analysis failed: ${error.message}`;
     refs.resultsBody.innerHTML =
@@ -501,6 +512,8 @@ function renderResults() {
     refs.resultsBody.innerHTML =
       '<tr><td colspan="11" class="empty">No results available.</td></tr>';
     resetSummary();
+    refs.reportButton.disabled = true;
+    refs.reportPanel.hidden = true;
     return;
   }
 
@@ -524,25 +537,19 @@ function renderResults() {
 
   refs.resultsInfo.textContent = `Ranked ${state.results.length} image(s).`;
   renderSummary();
+  renderReportPreview();
 }
 
 function renderSummary() {
-  const collectCount = state.results.filter((row) => row.priority === "Collect now").length;
-  const reviewCount = state.results.filter((row) => row.priority === "Review").length;
-  const skipCount = state.results.filter((row) => row.priority === "Skip").length;
-  const minutesPerSkip = safeNumber(refs.minutesPerSkip.value, 3.2);
-  const minutesPerReview = safeNumber(refs.minutesPerReview.value, 1.1);
-  const hourlyRate = safeNumber(refs.microscopeRate.value, 550);
-  const minutesSaved = skipCount * minutesPerSkip + reviewCount * minutesPerReview;
-  const costSaved = (minutesSaved / 60) * hourlyRate;
+  const summary = getEconomicsSummary();
 
-  refs.totalCount.textContent = String(state.results.length);
-  refs.collectCount.textContent = String(collectCount);
-  refs.reviewCount.textContent = String(reviewCount);
-  refs.skipCount.textContent = String(skipCount);
-  refs.timeSaved.textContent = `${round1(minutesSaved)} min`;
-  refs.costSaved.textContent = formatMoney(costSaved);
-  refs.roiStatus.textContent = `${formatMoney(hourlyRate)}/hr microscope model`;
+  refs.totalCount.textContent = String(summary.totalCount);
+  refs.collectCount.textContent = String(summary.collectCount);
+  refs.reviewCount.textContent = String(summary.reviewCount);
+  refs.skipCount.textContent = String(summary.skipCount);
+  refs.timeSaved.textContent = `${round1(summary.minutesSaved)} min`;
+  refs.costSaved.textContent = formatMoney(summary.costSaved);
+  refs.roiStatus.textContent = `${formatMoney(summary.hourlyRate)}/hr microscope model`;
 }
 
 function resetSummary() {
@@ -556,14 +563,63 @@ function resetSummary() {
 }
 
 function renderValidation() {
+  refs.validationStats.textContent = getValidationSummary().statusText;
+}
+
+function getEconomicsSummary() {
+  const collectCount = state.results.filter((row) => row.priority === "Collect now").length;
+  const reviewCount = state.results.filter((row) => row.priority === "Review").length;
+  const skipCount = state.results.filter((row) => row.priority === "Skip").length;
+  const minutesPerSkip = safeNumber(refs.minutesPerSkip.value, 3.2);
+  const minutesPerReview = safeNumber(refs.minutesPerReview.value, 1.1);
+  const hourlyRate = safeNumber(refs.microscopeRate.value, 550);
+  const minutesSaved = skipCount * minutesPerSkip + reviewCount * minutesPerReview;
+  const costSaved = (minutesSaved / 60) * hourlyRate;
+
+  return {
+    totalCount: state.results.length,
+    collectCount,
+    reviewCount,
+    skipCount,
+    minutesPerSkip,
+    minutesPerReview,
+    hourlyRate,
+    minutesSaved,
+    costSaved,
+  };
+}
+
+function getValidationSummary() {
   const labeled = state.results.filter((result) => result.label);
   if (state.labels.size === 0) {
-    refs.validationStats.textContent = "Awaiting labeled results.";
-    return;
+    return {
+      labelCount: 0,
+      matchedCount: 0,
+      exact: 0,
+      tp: 0,
+      fp: 0,
+      fn: 0,
+      tn: 0,
+      precision: 0,
+      recall: 0,
+      exactRate: 0,
+      statusText: "Awaiting labeled results.",
+    };
   }
   if (labeled.length === 0) {
-    refs.validationStats.textContent = `${state.labels.size} label(s) loaded; none match staged images yet.`;
-    return;
+    return {
+      labelCount: state.labels.size,
+      matchedCount: 0,
+      exact: 0,
+      tp: 0,
+      fp: 0,
+      fn: 0,
+      tn: 0,
+      precision: 0,
+      recall: 0,
+      exactRate: 0,
+      statusText: `${state.labels.size} label(s) loaded; none match staged images yet.`,
+    };
   }
 
   let exact = 0;
@@ -585,7 +641,20 @@ function renderValidation() {
   const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
   const recall = tp + fn > 0 ? tp / (tp + fn) : 0;
   const exactRate = exact / labeled.length;
-  refs.validationStats.textContent = `Labels matched: ${labeled.length}/${state.labels.size} | Exact: ${percent(exactRate)} | Useful precision: ${percent(precision)} | Useful recall: ${percent(recall)} | TN: ${tn}`;
+
+  return {
+    labelCount: state.labels.size,
+    matchedCount: labeled.length,
+    exact,
+    tp,
+    fp,
+    fn,
+    tn,
+    precision,
+    recall,
+    exactRate,
+    statusText: `Labels matched: ${labeled.length}/${state.labels.size} | Exact: ${percent(exactRate)} | Useful precision: ${percent(precision)} | Useful recall: ${percent(recall)} | TN: ${tn}`,
+  };
 }
 
 function renderWeightBars() {
@@ -641,6 +710,291 @@ function buildReasoning(components, weights) {
     .map((item) => item.label);
   const weakest = [...ranked].sort((a, b) => a.value - b.value)[0].label;
   return `Strong: ${strongest.join(", ")}. Watch: ${weakest}.`;
+}
+
+function renderReportPreview() {
+  if (state.results.length === 0) {
+    refs.reportPanel.hidden = true;
+    return;
+  }
+
+  const model = getReportModel();
+  refs.reportPanel.hidden = false;
+  refs.reportStatus.textContent = `${model.sourceType} | ${model.generatedAtText}`;
+  refs.reportBody.innerHTML = `
+    <div class="report-kpis">
+      ${reportKpi("Images", model.summary.totalCount)}
+      ${reportKpi("Collect queue", model.summary.collectCount)}
+      ${reportKpi("Time saved", `${round1(model.summary.minutesSaved)} min`)}
+      ${reportKpi("Cost saved", formatMoney(model.summary.costSaved))}
+    </div>
+    <div class="report-section">
+      <h3>Decision Brief</h3>
+      <p>${escapeHtml(model.recommendation)}</p>
+    </div>
+    <div class="report-section">
+      <h3>Validation</h3>
+      <p>${escapeHtml(model.validation.statusText)}</p>
+    </div>
+    <div class="report-section">
+      <h3>Recommended Collection Queue</h3>
+      ${reportList(
+        model.topQueue.map(
+          (result) =>
+            `#${result.rank} ${result.fileName} (${formatScore(result.score)}) - ${result.reasoning}`
+        )
+      )}
+    </div>
+    <div class="report-section">
+      <h3>Next Actions</h3>
+      ${reportList(model.nextActions)}
+    </div>
+  `;
+}
+
+function reportKpi(label, value) {
+  return `
+    <div class="report-kpi">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(String(value))}</strong>
+    </div>
+  `;
+}
+
+function reportList(items) {
+  if (items.length === 0) {
+    return "<p>No matching items.</p>";
+  }
+  return `<ul class="report-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
+function getReportModel() {
+  const summary = getEconomicsSummary();
+  const validation = getValidationSummary();
+  const generatedAt = new Date();
+  const isSynthetic =
+    state.results.length > 0 &&
+    state.results.every((result) => normalizeFileName(result.fileName).startsWith("sim_"));
+  const topQueue = state.results
+    .filter((result) => result.priority === "Collect now")
+    .slice(0, 10);
+  const reviewQueue = state.results
+    .filter((result) => result.priority === "Review")
+    .slice(0, 10);
+  const missedUseful = state.results.filter(
+    (result) => result.label && result.label !== "Skip" && priorityToLabel(result.priority) === "Skip"
+  );
+  const falseCollects = state.results.filter(
+    (result) => result.label === "Skip" && priorityToLabel(result.priority) !== "Skip"
+  );
+  const sourceType = isSynthetic ? "Synthetic session" : "Uploaded session";
+  const recommendation = buildReportRecommendation({
+    isSynthetic,
+    validation,
+    summary,
+    missedUseful,
+    falseCollects,
+  });
+
+  return {
+    generatedAt,
+    generatedAtText: generatedAt.toLocaleString(),
+    sourceType,
+    summary,
+    validation,
+    topQueue,
+    reviewQueue,
+    missedUseful,
+    falseCollects,
+    recommendation,
+    nextActions: buildNextActions({ isSynthetic, validation, summary, missedUseful }),
+    weights: FEATURE_DEFS.map((feature) => ({
+      label: feature.label,
+      value: state.weights[feature.key],
+    })),
+  };
+}
+
+function buildReportRecommendation({ isSynthetic, validation, summary, missedUseful, falseCollects }) {
+  if (summary.totalCount === 0) {
+    return "Run triage before generating a pilot report.";
+  }
+  if (isSynthetic) {
+    return "This is a workflow benchmark from simulated data. Use it for demos and pipeline testing, then replace it with a real labeled facility session before making performance claims.";
+  }
+  if (validation.matchedCount === 0) {
+    return "The queue is ranked, but no matching labels are available. Add human labels to estimate false-skip risk and pilot readiness.";
+  }
+  if (missedUseful.length > 0) {
+    return `False-skip risk needs review: ${missedUseful.length} labeled useful image(s) were placed in Skip. Lower strictness or inspect skipped items before collection decisions.`;
+  }
+  if (falseCollects.length > 0) {
+    return `The workflow avoided false skips, but ${falseCollects.length} labeled skip image(s) remained in the useful queue. Tighten thresholds if microscope time is the main constraint.`;
+  }
+  if (validation.recall >= 0.9 && validation.precision >= 0.8) {
+    return "The labeled session is ready for a small facility pilot: useful recall and precision are strong enough to test operational time savings.";
+  }
+  return "The workflow is useful for queue review, but more labels are needed before treating it as a decision-support pilot.";
+}
+
+function buildNextActions({ isSynthetic, validation, summary, missedUseful }) {
+  const actions = [];
+  if (isSynthetic) {
+    actions.push("Use the synthetic report in outreach only as a product workflow demonstration.");
+    actions.push("Request 50-200 anonymized atlas or hole images with collect/review/skip labels from one facility session.");
+  } else if (validation.matchedCount === 0) {
+    actions.push("Export the ranked CSV and ask a human operator to label the same filenames.");
+    actions.push("Re-import the label CSV to calculate false-skip risk and useful recall.");
+  } else if (missedUseful.length > 0) {
+    actions.push("Audit the skipped-but-useful images before changing collection policy.");
+    actions.push("Run the same images at lower strictness and compare useful recall.");
+  } else {
+    actions.push("Run a second labeled session from a different grid condition.");
+    actions.push("Package the report as an ROI memo for a core facility manager.");
+  }
+
+  if (summary.costSaved > 0) {
+    actions.push(`Use ${formatMoney(summary.costSaved)} estimated savings as a discovery hypothesis, not a validated claim.`);
+  }
+  return actions;
+}
+
+function exportPilotReport() {
+  if (state.results.length === 0) return;
+
+  const html = buildStandaloneReport(getReportModel());
+  const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  const timestamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
+  link.download = `cryo-triage-pilot-report-${timestamp}.html`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function buildStandaloneReport(model) {
+  const topRows = model.topQueue.map(reportTableRow).join("");
+  const reviewRows = model.reviewQueue.map(reportTableRow).join("");
+  const weights = model.weights
+    .map((weight) => `<tr><td>${escapeHtml(weight.label)}</td><td>${round1(weight.value * 100)}%</td></tr>`)
+    .join("");
+  const misses = model.missedUseful.map(reportTableRow).join("");
+  const falseCollects = model.falseCollects.map(reportTableRow).join("");
+  const actions = model.nextActions.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CryoTriage Pilot Report</title>
+  <style>
+    :root { color-scheme: light; --ink: #172126; --muted: #5d6a70; --line: #d8dfdc; --bg: #f6f8f8; --accent: #008f7a; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: Arial, sans-serif; }
+    main { max-width: 1040px; margin: 0 auto; padding: 32px 18px 48px; }
+    h1 { margin: 0 0 6px; font-size: 30px; }
+    h2 { margin: 26px 0 10px; font-size: 17px; }
+    p { color: var(--muted); line-height: 1.5; }
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 22px 0; }
+    .kpi, section { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+    .kpi span { color: var(--muted); display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .kpi strong { display: block; font-family: Menlo, monospace; font-size: 24px; margin-top: 6px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border-bottom: 1px solid var(--line); font-size: 13px; padding: 8px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    .note { border-left: 4px solid var(--accent); padding-left: 12px; }
+    @media (max-width: 760px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p>${escapeHtml(model.sourceType)} | Generated ${escapeHtml(model.generatedAtText)}</p>
+    <h1>CryoTriage Pilot Report</h1>
+    <p class="note">${escapeHtml(model.recommendation)}</p>
+    <div class="kpis">
+      ${standaloneKpi("Images", model.summary.totalCount)}
+      ${standaloneKpi("Collect", model.summary.collectCount)}
+      ${standaloneKpi("Time saved", `${round1(model.summary.minutesSaved)} min`)}
+      ${standaloneKpi("Cost saved", formatMoney(model.summary.costSaved))}
+    </div>
+
+    <section>
+      <h2>Validation</h2>
+      <p>${escapeHtml(model.validation.statusText)}</p>
+      <table>
+        <tbody>
+          <tr><td>Matched labels</td><td>${model.validation.matchedCount}/${model.validation.labelCount}</td></tr>
+          <tr><td>Exact agreement</td><td>${percent(model.validation.exactRate)}</td></tr>
+          <tr><td>Useful precision</td><td>${percent(model.validation.precision)}</td></tr>
+          <tr><td>Useful recall</td><td>${percent(model.validation.recall)}</td></tr>
+          <tr><td>False skips</td><td>${model.validation.fn}</td></tr>
+          <tr><td>False useful queue</td><td>${model.validation.fp}</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Recommended Collection Queue</h2>
+      ${reportTable(topRows)}
+    </section>
+
+    <section>
+      <h2>Review Queue</h2>
+      ${reportTable(reviewRows)}
+    </section>
+
+    <section>
+      <h2>Risk Audit</h2>
+      <p>Skipped but labeled useful</p>
+      ${reportTable(misses)}
+      <p>Labeled skip but kept in useful queue</p>
+      ${reportTable(falseCollects)}
+    </section>
+
+    <section>
+      <h2>Scoring Weights</h2>
+      <table><tbody>${weights}</tbody></table>
+    </section>
+
+    <section>
+      <h2>Next Actions</h2>
+      <ul>${actions}</ul>
+    </section>
+  </main>
+</body>
+</html>`;
+}
+
+function standaloneKpi(label, value) {
+  return `<div class="kpi"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`;
+}
+
+function reportTable(rows) {
+  if (!rows) return "<p>No matching items.</p>";
+  return `
+    <table>
+      <thead>
+        <tr><th>Rank</th><th>Image</th><th>Priority</th><th>Score</th><th>Label</th><th>Reasoning</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function reportTableRow(result) {
+  return `
+    <tr>
+      <td>${result.rank}</td>
+      <td>${escapeHtml(result.fileName)}</td>
+      <td>${escapeHtml(result.priority)}</td>
+      <td>${formatScore(result.score)}</td>
+      <td>${escapeHtml(result.label ?? "")}</td>
+      <td>${escapeHtml(result.reasoning)}</td>
+    </tr>
+  `;
 }
 
 function exportCsv() {
@@ -938,6 +1292,15 @@ function safeNumber(value, fallback) {
 
 function formatScore(value) {
   return Number(value).toFixed(1);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function formatMoney(value) {

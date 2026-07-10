@@ -77,6 +77,9 @@
             <button id="csvButton" type="button" class="secondary" disabled>
               Export CSV
             </button>
+            <button id="reportButton" type="button" class="secondary" disabled>
+              Pilot Report
+            </button>
           </div>
         </div>
       </section>
@@ -150,6 +153,14 @@
           <p>Cost saved</p>
           <strong id="costSaved">$0</strong>
         </div>
+      </section>
+
+      <section id="reportPanel" class="panel report-panel" hidden>
+        <div class="panel-head">
+          <h2>Pilot Report Preview</h2>
+          <span id="reportStatus">No report generated</span>
+        </div>
+        <div id="reportBody" class="report-body"></div>
       </section>
 
       <section class="results">

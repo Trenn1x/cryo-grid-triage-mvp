@@ -23,6 +23,7 @@ Browser-based cryo-EM grid triage prototype. It ranks uploaded atlas/hole images
 - Time and cost savings estimates
 - CSV export with scores, metrics, labels, weights, and ROI assumptions
 - Label CSV export for synthetic sessions
+- Pilot report preview and downloadable standalone HTML report
 
 ## Synthetic sessions
 
@@ -31,6 +32,18 @@ If real facility data is not available yet, use `Simulate Session`.
 The simulator creates deterministic, browser-generated grid images with a configurable image count and seed. It also creates matching labels that can be exported as CSV. This is useful for workflow demos, sales discovery, UI testing, and calibration-loop validation.
 
 Synthetic data is not evidence of scientific performance. Treat it as product simulation until labels from real sessions are available.
+
+## Pilot report
+
+After running triage, use `Pilot Report` to download a standalone HTML summary. The report includes:
+
+- Collection/review/skip counts
+- Estimated time and cost savings
+- Validation metrics when labels are available
+- Recommended collection queue
+- Review queue
+- Risk audit for false skips and false useful-queue items
+- Scoring weights and suggested next actions
 
 ## Label CSV
 

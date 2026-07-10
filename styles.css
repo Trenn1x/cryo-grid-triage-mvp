@@ -361,6 +361,76 @@ button:disabled {
   color: var(--skip);
 }
 
+.report-panel {
+  margin-bottom: 12px;
+}
+
+#reportStatus {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.report-body {
+  display: grid;
+  gap: 12px;
+}
+
+.report-kpis {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.report-kpi {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.report-kpi span,
+.report-section h3 {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.report-kpi strong {
+  display: block;
+  font-family: "IBM Plex Mono", Menlo, monospace;
+  font-size: 1.2rem;
+  margin-top: 4px;
+}
+
+.report-section {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 7px;
+  padding-top: 11px;
+}
+
+.report-section p {
+  color: var(--ink);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.report-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.report-list li {
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+
 .results {
   overflow: hidden;
 }
@@ -487,7 +557,8 @@ td.empty {
   }
 
   .number-grid,
-  .summary {
+  .summary,
+  .report-kpis {
     grid-template-columns: 1fr 1fr;
   }
 
